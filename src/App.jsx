@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { loadDraft, saveDraft, clearDraft, submitResponse, loadSubmitted } from './storage';
 
+
 const SECTIONS = [
   {
     id: 'event',
@@ -95,8 +96,6 @@ const SECTIONS = [
   },
 ];
 
-const DJ_PIN = '0508';
-
 export default function App() {
   const [mode, setMode] = useState('loading');
   const [formData, setFormData] = useState({});
@@ -104,8 +103,7 @@ export default function App() {
   const [saved, setSaved] = useState(null);
   const [toast, setToast] = useState('');
   const [activeSection, setActiveSection] = useState(0);
-  const [pinValue, setPinValue] = useState('');
-  const [pinError, setPinError] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle');
   const [hasDraft, setHasDraft] = useState(false);
   const sectionRefs = useRef([]);
@@ -160,6 +158,8 @@ export default function App() {
   }
 
   async function handleSubmit() {
+    if (submitting) return;
+    setSubmitting(true);
     try {
       const payload = await submitResponse(formData);
       clearDraft();
@@ -169,36 +169,9 @@ export default function App() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch {
       showToast('Error saving. Please try again.');
+    } finally {
+      setSubmitting(false);
     }
-  }
-
-  function handlePinSubmit(val) {
-    const v = val || pinValue;
-    if (v === DJ_PIN) {
-      setMode('dj');
-      setPinValue('');
-      setPinError(false);
-    } else if (v.length === 4) {
-      setPinError(true);
-      setTimeout(() => setPinError(false), 2000);
-    }
-  }
-
-  function copyResults() {
-    const d = saved?.data || formData;
-    const lines = ['ROCE CEREMONY — DJ INQUIRY RESPONSES', '='.repeat(44)];
-    if (saved?.submitted_at) lines.push(`Submitted: ${new Date(saved.submitted_at).toLocaleString()}`);
-    lines.push('');
-    SECTIONS.forEach((section) => {
-      lines.push(`\n${'─'.repeat(36)}`);
-      lines.push(section.title.toUpperCase());
-      lines.push('─'.repeat(36));
-      section.fields.forEach((field) => {
-        lines.push(`${field.label}: ${d[field.key] || '(not answered)'}`);
-      });
-    });
-    navigator.clipboard.writeText(lines.join('\n'));
-    showToast('Copied to clipboard!');
   }
 
   function showToast(msg) {
@@ -228,8 +201,6 @@ export default function App() {
     return () => observer.disconnect();
   }, [mode]);
 
-  const viewData = saved?.data || formData;
-
   if (mode === 'loading') {
     return (
       <div className="app-wrapper">
@@ -257,59 +228,21 @@ export default function App() {
         </div>
       )}
 
-      {/* PIN overlay */}
-      {mode === 'pin' && (
-        <div className="pin-overlay" onClick={() => { setMode(saved?.submitted ? 'submitted' : 'form'); setPinValue(''); }}>
-          <div className="pin-box" onClick={(e) => e.stopPropagation()}>
-            <h3>DJ Portal</h3>
-            <p>Enter 4-digit PIN to view responses</p>
-            <input
-              className="pin-input"
-              type="password"
-              maxLength={4}
-              value={pinValue}
-              autoFocus
-              onChange={(e) => {
-                const v = e.target.value.replace(/\D/g, '');
-                setPinValue(v);
-                if (v.length === 4) handlePinSubmit(v);
-              }}
-            />
-            {pinError && <div className="pin-error">Incorrect PIN</div>}
-            <button className="pin-cancel" onClick={() => { setMode(saved?.submitted ? 'submitted' : 'form'); setPinValue(''); }}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Header for form + submitted */}
-      {(mode === 'form' || mode === 'submitted') && (
-        <div className="header">
-          <div className="header-ornament">✦ ◈ ✦</div>
-          <h1>The <em>Roce</em></h1>
-          <div className="header-sub">DJ Services Inquiry</div>
-          <div className="header-line" />
-          {mode === 'form' && (
-            <p className="header-desc">
-              Please fill out as much detail as you can below so I can plan the perfect sound
-              for the ceremony. Every detail helps — from room dimensions to must-play tracks.
-              Your progress is saved automatically, so feel free to close this and come back anytime.
-            </p>
-          )}
-          <div className="prepared-by">Prepared by <strong>Aaron Purewal</strong></div>
-        </div>
-      )}
-
-      {/* DJ view header */}
-      {mode === 'dj' && (
-        <div className="header">
-          <div className="header-ornament">✦ ◈ ✦</div>
-          <h1>The <em>Roce</em></h1>
-          <div className="header-sub">Response Review</div>
-          <div className="header-line" />
-        </div>
-      )}
+      <div className="header">
+        <div className="header-ornament">✦ ◈ ✦</div>
+        <h1>The <em>Roce</em></h1>
+        <div className="header-sub">DJ Services Inquiry</div>
+        <div className="header-line" />
+        {mode === 'form' && (
+          <p className="header-desc">
+            Please fill out as much detail as you can below so I can plan the perfect sound
+            for the ceremony. Every detail helps — from room dimensions to must-play tracks.
+            Your progress is saved automatically, so feel free to close this and come back anytime.
+          </p>
+        )}
+        <div className="prepared-by">Prepared by <strong>Aaron Purewal</strong></div>
+      </div>
 
       {/* FORM MODE */}
       {mode === 'form' && (
@@ -394,17 +327,13 @@ export default function App() {
           </div>
 
           <div className="submit-area">
-            <button className="submit-btn" onClick={handleSubmit} disabled={!canSubmit}>
-              Submit Responses ✦
+            <button className="submit-btn" onClick={handleSubmit} disabled={!canSubmit || submitting}>
+              {submitting ? 'Submitting…' : 'Submit Responses ✦'}
             </button>
             <p className="submit-hint">
               {filledFields} of {totalFields} fields completed
               {filledFields > 0 && !agreed && ' — please check the agreement box above'}
             </p>
-          </div>
-
-          <div className="dj-portal-trigger">
-            <button className="dj-portal-link" onClick={() => setMode('pin')}>dj portal</button>
           </div>
         </>
       )}
@@ -426,55 +355,6 @@ export default function App() {
                 hour: 'numeric', minute: '2-digit',
               })}
             </div>
-          )}
-          <div className="dj-portal-trigger" style={{ paddingTop: 60 }}>
-            <button className="dj-portal-link" onClick={() => setMode('pin')}>dj portal</button>
-          </div>
-        </div>
-      )}
-
-      {/* DJ VIEW */}
-      {mode === 'dj' && (
-        <div className="results-container">
-          <div className="results-header">
-            <div className="results-badge">✦ DJ Portal</div>
-            <button className="back-btn" onClick={() => setMode(saved?.submitted ? 'submitted' : 'form')}>← Exit</button>
-          </div>
-
-          {saved?.submitted_at && (
-            <p className="results-timestamp">
-              Submitted {new Date(saved.submitted_at).toLocaleDateString('en-US', {
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                hour: 'numeric', minute: '2-digit',
-              })}
-            </p>
-          )}
-
-          {!saved?.submitted ? (
-            <div className="results-empty">
-              <div className="results-empty-icon">◈</div>
-              <p>No responses submitted yet.</p>
-              <p className="results-empty-sub">The planner hasn't submitted the form yet.</p>
-            </div>
-          ) : (
-            <>
-              {SECTIONS.map((section, si) => (
-                <div key={section.id} className="result-section" style={{ animationDelay: `${si * 0.1}s` }}>
-                  <h3 className="result-section-title">{section.icon} {section.title}</h3>
-                  {section.fields.map((field) => (
-                    <div className="result-row" key={field.key}>
-                      <div className="result-label">{field.label}</div>
-                      <div className={`result-value ${!viewData[field.key]?.trim() ? 'empty' : ''}`}>
-                        {viewData[field.key]?.trim() || 'Not answered'}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-              <div className="results-actions">
-                <button className="copy-btn" onClick={copyResults}>Copy All Responses</button>
-              </div>
-            </>
           )}
         </div>
       )}

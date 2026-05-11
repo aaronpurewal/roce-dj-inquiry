@@ -5,25 +5,63 @@ A form for wedding planners to provide venue, audio, music, and logistics detail
 ## Architecture
 
 - **Frontend**: Vite + React, deployed on Vercel
-- **Storage**: `localStorage` only — drafts and submitted responses both live in the browser. No backend.
-- **DJ Portal**: Hidden link at bottom of page, PIN-protected (default: `0508`)
+- **Draft saving**: `localStorage` — survives tab close, per-browser
+- **Submissions**: POSTed as JSON to a webhook URL of your choice (Formspree, Sheet.best, Zapier, etc.). No database, no backend code.
 
-> **Heads up:** Because responses are stored in `localStorage`, the DJ portal only shows submissions made **in the same browser**. If the planner submits on their laptop, you won't see those responses on your phone. Use this when the form will be filled out on the same device you'll review on, or have the planner share their screen / send a screenshot of the response review page.
+Each submission is sent as a JSON object with all the form fields plus a `submitted_at` ISO timestamp.
 
 ## Setup
+
+Pick **one** of the following destinations for submissions.
+
+### Option A — Email per submission (Formspree, 2 min) ★ recommended
+
+1. Sign up at [formspree.io](https://formspree.io) (free tier: 50 submissions/month).
+2. Create a new form. Copy its endpoint URL — looks like `https://formspree.io/f/xxxxxxxx`.
+3. Use that URL as `VITE_FORM_ENDPOINT` (see "Run locally" below).
+
+You'll get an email for every submission with all the fields laid out. View the full history any time in the Formspree dashboard.
+
+### Option B — Rows in a Google Sheet (Sheet.best, 5 min)
+
+1. Create a new Google Sheet. Put each form field key (`event_date`, `ceremony_start`, etc.) as a column header in row 1, plus a `submitted_at` column. The field keys are the `key` values in `SECTIONS` in `src/App.jsx`.
+2. Sign up at [sheet.best](https://sheet.best), connect your sheet, copy the API URL.
+3. Use that URL as `VITE_FORM_ENDPOINT`.
+
+Each submission appends a new row. Review everything in the sheet.
+
+### Option C — Anywhere else
+
+Any webhook that accepts a JSON POST works. Examples:
+- **Zapier** → Catch Hook → forward to Slack/Notion/Airtable/email
+- **Make.com / n8n** → same idea
+- **Your own serverless function** (Vercel/Cloudflare/Lambda)
+
+## Run locally
 
 ```bash
 git clone <your-repo-url>
 cd roce-dj-inquiry
 npm install
+cp .env.example .env
+```
+
+Edit `.env` and set your endpoint:
+```
+VITE_FORM_ENDPOINT=https://formspree.io/f/xxxxxxxx
+```
+
+Then:
+```bash
 npm run dev
 ```
 
-No environment variables or external services required.
-
 ## Deploy to Vercel
 
-Push to GitHub, then import the repo in Vercel — no environment variables needed.
+Push to GitHub, then in Vercel:
+1. Import the repo.
+2. Add an environment variable: `VITE_FORM_ENDPOINT` = your webhook URL.
+3. Deploy.
 
 Or via CLI:
 ```bash
@@ -32,14 +70,22 @@ npx vercel --prod
 
 ## How it works
 
-**Wedding planner** opens the link and fills out the form. Progress auto-saves to their browser's `localStorage`. They can close the tab, come back days later, and pick up where they left off. When they submit, the response is saved to `localStorage` and they see a confirmation screen.
+1. Planner fills out the form. Progress is auto-saved to their browser's `localStorage`, so they can close the tab and come back later.
+2. When they submit, the entire form payload is POSTed as JSON to `VITE_FORM_ENDPOINT`.
+3. You review submissions wherever the webhook routes them — your inbox, a Google Sheet, Slack, etc.
 
-**DJ (you)** opens the same browser, scrolls to the very bottom, clicks the nearly-invisible "dj portal" text, enters PIN `0508`, and sees the submitted response with a "Copy All" button.
+Each planner who opens the link in their own browser gets their own draft and submits independently — you'll see one delivery per submission on your end.
 
-## Changing the PIN
+## Payload shape
 
-In `src/App.jsx`, find `const DJ_PIN = '0508'` and change it.
+```json
+{
+  "submitted_at": "2026-05-11T18:23:45.123Z",
+  "event_date": "...",
+  "ceremony_start": "...",
+  "venue_name": "...",
+  "...": "..."
+}
+```
 
-## Clearing stored data
-
-The submitted response lives under the `roce-submitted` key in `localStorage`, and the in-progress draft lives under `roce-draft`. Clearing the site's storage in browser devtools wipes both.
+Field keys are defined in `SECTIONS` in `src/App.jsx`.
