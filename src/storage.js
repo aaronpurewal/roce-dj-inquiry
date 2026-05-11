@@ -32,15 +32,11 @@ export async function loadSubmitted() {
   }
 }
 
-// ── Submit (POST to configured webhook — Formspree / Sheet.best / Zapier / etc.) ──
+// ── Submit (POST to Formspree — override with VITE_FORM_ENDPOINT if needed) ──
 
-const FORM_ENDPOINT = import.meta.env.VITE_FORM_ENDPOINT;
+const FORM_ENDPOINT = import.meta.env.VITE_FORM_ENDPOINT || 'https://formspree.io/f/mlgzaddq';
 
 export async function submitResponse(data) {
-  if (!FORM_ENDPOINT) {
-    throw new Error('Form endpoint not configured. Set VITE_FORM_ENDPOINT in your environment.');
-  }
-
   const submitted_at = new Date().toISOString();
 
   const res = await fetch(FORM_ENDPOINT, {

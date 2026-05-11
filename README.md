@@ -10,32 +10,15 @@ A form for wedding planners to provide venue, audio, music, and logistics detail
 
 Each submission is sent as a JSON object with all the form fields plus a `submitted_at` ISO timestamp.
 
-## Setup
+## Where submissions go
 
-Pick **one** of the following destinations for submissions.
+Submissions are POSTed to a Formspree endpoint that's hardcoded in `src/storage.js`. Each submission lands in the inbox associated with that Formspree form, and you can also browse the full history in the Formspree dashboard.
 
-### Option A — Email per submission (Formspree, 2 min) ★ recommended
+To change the destination, either:
+- Edit `FORM_ENDPOINT` in `src/storage.js`, or
+- Set `VITE_FORM_ENDPOINT` to override at build time.
 
-1. Sign up at [formspree.io](https://formspree.io) (free tier: 50 submissions/month).
-2. Create a new form. Copy its endpoint URL — looks like `https://formspree.io/f/xxxxxxxx`.
-3. Use that URL as `VITE_FORM_ENDPOINT` (see "Run locally" below).
-
-You'll get an email for every submission with all the fields laid out. View the full history any time in the Formspree dashboard.
-
-### Option B — Rows in a Google Sheet (Sheet.best, 5 min)
-
-1. Create a new Google Sheet. Put each form field key (`event_date`, `ceremony_start`, etc.) as a column header in row 1, plus a `submitted_at` column. The field keys are the `key` values in `SECTIONS` in `src/App.jsx`.
-2. Sign up at [sheet.best](https://sheet.best), connect your sheet, copy the API URL.
-3. Use that URL as `VITE_FORM_ENDPOINT`.
-
-Each submission appends a new row. Review everything in the sheet.
-
-### Option C — Anywhere else
-
-Any webhook that accepts a JSON POST works. Examples:
-- **Zapier** → Catch Hook → forward to Slack/Notion/Airtable/email
-- **Make.com / n8n** → same idea
-- **Your own serverless function** (Vercel/Cloudflare/Lambda)
+Any webhook that accepts a JSON POST works — Formspree, Sheet.best (Google Sheets), Zapier, Make, your own serverless function, etc.
 
 ## Run locally
 
@@ -43,25 +26,14 @@ Any webhook that accepts a JSON POST works. Examples:
 git clone <your-repo-url>
 cd roce-dj-inquiry
 npm install
-cp .env.example .env
-```
-
-Edit `.env` and set your endpoint:
-```
-VITE_FORM_ENDPOINT=https://formspree.io/f/xxxxxxxx
-```
-
-Then:
-```bash
 npm run dev
 ```
 
+No env vars required — the endpoint is already wired up.
+
 ## Deploy to Vercel
 
-Push to GitHub, then in Vercel:
-1. Import the repo.
-2. Add an environment variable: `VITE_FORM_ENDPOINT` = your webhook URL.
-3. Deploy.
+Push to GitHub, then import the repo in Vercel. No environment variables needed.
 
 Or via CLI:
 ```bash
