@@ -19,60 +19,33 @@ export function clearDraft() {
   localStorage.removeItem('roce-draft');
 }
 
-// ── Submitted responses (Supabase — shared between planner and DJ) ──
+// ── Submitted response (localStorage — only visible in this browser) ──
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const headers = () => ({
-  'Content-Type': 'application/json',
-  'apikey': SUPABASE_ANON_KEY,
-  'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-});
+const SUBMITTED_KEY = 'roce-submitted';
 
 export async function submitResponse(data) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error('Supabase not configured');
-  }
-
   const payload = {
-    id: 'roce-response',
-    response_data: data,
+    data,
+    submitted: true,
     submitted_at: new Date().toISOString(),
   };
-
-  // Upsert: insert or update the single row
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/responses`, {
-    method: 'POST',
-    headers: {
-      ...headers(),
-      'Prefer': 'return=representation,resolution=merge-duplicates',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) throw new Error('Failed to submit');
-  return { data, submitted: true, submitted_at: payload.submitted_at };
+  try {
+    localStorage.setItem(SUBMITTED_KEY, JSON.stringify(payload));
+  } catch {
+    throw new Error('Failed to save submission');
+  }
+  return payload;
 }
 
 export async function loadSubmitted() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/responses?id=eq.roce-response&select=*`,
-      { headers: headers() }
-    );
-    if (!res.ok) return null;
-    const rows = await res.json();
-    if (rows.length === 0) return null;
-    const row = rows[0];
-    return {
-      data: row.response_data,
-      submitted: true,
-      submitted_at: row.submitted_at,
-    };
+    const raw = localStorage.getItem(SUBMITTED_KEY);
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
+}
+
+export function clearSubmitted() {
+  localStorage.removeItem(SUBMITTED_KEY);
 }

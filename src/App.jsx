@@ -114,7 +114,7 @@ export default function App() {
   // ── Load on mount ──
   useEffect(() => {
     (async () => {
-      // 1. Check if already submitted (Firebase)
+      // 1. Check if already submitted (localStorage)
       const sub = await loadSubmitted();
       if (sub) {
         setSaved(sub);

@@ -5,67 +5,25 @@ A form for wedding planners to provide venue, audio, music, and logistics detail
 ## Architecture
 
 - **Frontend**: Vite + React, deployed on Vercel
-- **Draft saving**: localStorage (planner's browser — survives tab close)
-- **Submitted responses**: Supabase Postgres (shared — DJ can read from any device)
+- **Storage**: `localStorage` only — drafts and submitted responses both live in the browser. No backend.
 - **DJ Portal**: Hidden link at bottom of page, PIN-protected (default: `0508`)
 
+> **Heads up:** Because responses are stored in `localStorage`, the DJ portal only shows submissions made **in the same browser**. If the planner submits on their laptop, you won't see those responses on your phone. Use this when the form will be filled out on the same device you'll review on, or have the planner share their screen / send a screenshot of the response review page.
+
 ## Setup
-
-### 1. Create a Supabase project (free, 2 min)
-
-1. Go to [supabase.com](https://supabase.com) and create a new project
-2. Once the project is ready, go to **SQL Editor** and run this:
-
-```sql
-create table responses (
-  id text primary key,
-  response_data jsonb not null,
-  submitted_at timestamptz not null default now()
-);
-
--- Allow public read/write (fine for a single-use form)
-alter table responses enable row level security;
-
-create policy "Allow public access"
-  on responses for all
-  using (true)
-  with check (true);
-```
-
-3. Go to **Settings → API** and copy:
-   - **Project URL** (looks like `https://abcdefg.supabase.co`)
-   - **anon public** key
-
-### 2. Clone and configure
 
 ```bash
 git clone <your-repo-url>
 cd roce-dj-inquiry
 npm install
-cp .env.example .env
-```
-
-Edit `.env`:
-```
-VITE_SUPABASE_URL=https://abcdefg.supabase.co
-VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIs...
-```
-
-### 3. Run locally
-
-```bash
 npm run dev
 ```
 
-### 4. Deploy to Vercel
+No environment variables or external services required.
 
-Push to GitHub, then:
+## Deploy to Vercel
 
-1. Go to [vercel.com](https://vercel.com) → Import Project → select this repo
-2. Add two environment variables:
-   - `VITE_SUPABASE_URL` = your project URL
-   - `VITE_SUPABASE_ANON_KEY` = your anon key
-3. Deploy
+Push to GitHub, then import the repo in Vercel — no environment variables needed.
 
 Or via CLI:
 ```bash
@@ -74,15 +32,14 @@ npx vercel --prod
 
 ## How it works
 
-**Wedding planner** opens the link and fills out the form. Progress auto-saves to their browser's localStorage. They can close the tab, come back days later, and pick up where they left off. When they submit, the data goes to Supabase and they see a confirmation screen. They cannot view the submitted responses.
+**Wedding planner** opens the link and fills out the form. Progress auto-saves to their browser's `localStorage`. They can close the tab, come back days later, and pick up where they left off. When they submit, the response is saved to `localStorage` and they see a confirmation screen.
 
-**DJ (you)** opens the same link, scrolls to the very bottom, clicks the nearly-invisible "dj portal" text, enters PIN `0508`, and sees all responses with a "Copy All" button.
+**DJ (you)** opens the same browser, scrolls to the very bottom, clicks the nearly-invisible "dj portal" text, enters PIN `0508`, and sees the submitted response with a "Copy All" button.
 
 ## Changing the PIN
 
 In `src/App.jsx`, find `const DJ_PIN = '0508'` and change it.
 
-## Checking responses directly in Supabase
+## Clearing stored data
 
-You can also see the raw data anytime at:
-**Supabase Dashboard → Table Editor → responses**
+The submitted response lives under the `roce-submitted` key in `localStorage`, and the in-progress draft lives under `roce-draft`. Clearing the site's storage in browser devtools wipes both.
