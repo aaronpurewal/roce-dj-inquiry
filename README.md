@@ -74,9 +74,9 @@ npx vercel --prod
 
 ## How it works
 
-**Wedding planner** opens the link and fills out the form. Progress auto-saves to their browser's localStorage. They can close the tab, come back days later, and pick up where they left off. When they submit, the data goes to Supabase and they see a confirmation screen. They cannot view the submitted responses.
+**Wedding planner** opens the link and fills out the form. Progress auto-saves to their browser's localStorage. They can close the tab, come back days later, and pick up where they left off. When they submit, a new row is inserted into Supabase with a unique ID, that ID is stored in their browser, and they see a success screen. They cannot view other planners' submissions. If they want to submit again (for testing), the success screen has a "Submit another response" button that resets the local state.
 
-**DJ (you)** opens the same link, scrolls to the very bottom, clicks the nearly-invisible "dj portal" text, enters PIN `0508`, and sees all responses with a "Copy All" button.
+**DJ (you)** opens the same link, scrolls to the very bottom, clicks the nearly-invisible "dj portal" text, enters PIN `0508`, and sees a list of every submission ordered by most-recent-first. Click any row to see the full response and a "Copy All" button. Each row also has an `×` to delete that submission (use to clean up test entries).
 
 ## Changing the PIN
 

@@ -1,5 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { loadDraft, saveDraft, clearDraft, submitResponse, loadSubmitted } from './storage';
+import {
+  loadDraft,
+  saveDraft,
+  clearDraft,
+  submitResponse,
+  loadMySubmission,
+  loadAllSubmissions,
+  deleteSubmission,
+  clearMySubmissionId,
+} from './storage';
 
 const SECTIONS = [
   {
@@ -108,14 +117,17 @@ export default function App() {
   const [pinError, setPinError] = useState(false);
   const [saveStatus, setSaveStatus] = useState('idle');
   const [hasDraft, setHasDraft] = useState(false);
+  const [submissions, setSubmissions] = useState([]);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [djLoading, setDjLoading] = useState(false);
   const sectionRefs = useRef([]);
   const saveTimer = useRef(null);
 
   // ── Load on mount ──
   useEffect(() => {
     (async () => {
-      // 1. Check if already submitted (Firebase)
-      const sub = await loadSubmitted();
+      // 1. Check if THIS browser has already submitted
+      const sub = await loadMySubmission();
       if (sub) {
         setSaved(sub);
         setFormData(sub.data || {});
@@ -167,27 +179,69 @@ export default function App() {
       setMode('submitted');
       showToast('Submitted successfully!');
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch {
-      showToast('Error saving. Please try again.');
+    } catch (e) {
+      console.error('Submit failed:', e);
+      showToast(`Error saving: ${e.message || 'please try again.'}`);
     }
+  }
+
+  function handleSubmitAnother() {
+    clearMySubmissionId();
+    clearDraft();
+    setSaved(null);
+    setFormData({});
+    setAgreed(false);
+    setHasDraft(false);
+    setMode('form');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  async function openDjPortal() {
+    setMode('dj');
+    setDjLoading(true);
+    const all = await loadAllSubmissions();
+    setSubmissions(all);
+    setSelectedSubmission(null);
+    setDjLoading(false);
   }
 
   function handlePinSubmit(val) {
     const v = val || pinValue;
     if (v === DJ_PIN) {
-      setMode('dj');
       setPinValue('');
       setPinError(false);
+      openDjPortal();
     } else if (v.length === 4) {
       setPinError(true);
       setTimeout(() => setPinError(false), 2000);
     }
   }
 
-  function copyResults() {
-    const d = saved?.data || formData;
+  async function handleDeleteSubmission(id) {
+    if (!confirm('Delete this submission? This cannot be undone.')) return;
+    try {
+      await deleteSubmission(id);
+      setSubmissions((prev) => prev.filter((s) => s.id !== id));
+      if (selectedSubmission?.id === id) setSelectedSubmission(null);
+      showToast('Submission deleted.');
+    } catch (e) {
+      console.error('Delete failed:', e);
+      showToast(`Error deleting: ${e.message || 'please try again.'}`);
+    }
+  }
+
+  function submissionSummary(sub) {
+    const d = sub.data || {};
+    const headline = d.venue_name?.trim() || d.event_date?.trim() || '(no venue / date yet)';
+    const subline = d.venue_name && d.event_date ? d.event_date : '';
+    return { headline, subline };
+  }
+
+  function copyResults(sourceSub) {
+    const source = sourceSub || selectedSubmission || saved;
+    const d = source?.data || formData;
     const lines = ['ROCE CEREMONY — DJ INQUIRY RESPONSES', '='.repeat(44)];
-    if (saved?.submitted_at) lines.push(`Submitted: ${new Date(saved.submitted_at).toLocaleString()}`);
+    if (source?.submitted_at) lines.push(`Submitted: ${new Date(source.submitted_at).toLocaleString()}`);
     lines.push('');
     SECTIONS.forEach((section) => {
       lines.push(`\n${'─'.repeat(36)}`);
@@ -228,7 +282,8 @@ export default function App() {
     return () => observer.disconnect();
   }, [mode]);
 
-  const viewData = saved?.data || formData;
+  const viewData = selectedSubmission?.data || saved?.data || formData;
+  const viewMeta = selectedSubmission || saved;
 
   if (mode === 'loading') {
     return (
@@ -413,9 +468,9 @@ export default function App() {
       {mode === 'submitted' && (
         <div className="success-screen">
           <div className="success-icon">✓</div>
-          <h2 className="success-title">Thank You</h2>
+          <h2 className="success-title">Success</h2>
           <p className="success-sub">
-            Your responses have been submitted successfully. Aaron will review everything
+            Your responses have been submitted. Aaron will review everything
             and follow up with an equipment plan, proposed set structure, and final logistics.
             If anything changes, please reach out directly.
           </p>
@@ -427,6 +482,11 @@ export default function App() {
               })}
             </div>
           )}
+          <div className="success-actions">
+            <button className="success-secondary-btn" onClick={handleSubmitAnother}>
+              Submit another response
+            </button>
+          </div>
           <div className="dj-portal-trigger" style={{ paddingTop: 60 }}>
             <button className="dj-portal-link" onClick={() => setMode('pin')}>dj portal</button>
           </div>
@@ -438,26 +498,77 @@ export default function App() {
         <div className="results-container">
           <div className="results-header">
             <div className="results-badge">✦ DJ Portal</div>
-            <button className="back-btn" onClick={() => setMode(saved?.submitted ? 'submitted' : 'form')}>← Exit</button>
+            {selectedSubmission ? (
+              <button className="back-btn" onClick={() => setSelectedSubmission(null)}>← Back to list</button>
+            ) : (
+              <button className="back-btn" onClick={() => setMode(saved?.submitted ? 'submitted' : 'form')}>← Exit</button>
+            )}
           </div>
 
-          {saved?.submitted_at && (
-            <p className="results-timestamp">
-              Submitted {new Date(saved.submitted_at).toLocaleDateString('en-US', {
-                weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-                hour: 'numeric', minute: '2-digit',
-              })}
-            </p>
+          {djLoading && (
+            <div className="results-empty">
+              <p>Loading submissions…</p>
+            </div>
           )}
 
-          {!saved?.submitted ? (
+          {!djLoading && !selectedSubmission && submissions.length === 0 && (
             <div className="results-empty">
               <div className="results-empty-icon">◈</div>
               <p>No responses submitted yet.</p>
-              <p className="results-empty-sub">The planner hasn't submitted the form yet.</p>
+              <p className="results-empty-sub">When the planner submits the form, it will appear here.</p>
             </div>
-          ) : (
+          )}
+
+          {!djLoading && !selectedSubmission && submissions.length > 0 && (
             <>
+              <p className="results-timestamp">
+                {submissions.length} {submissions.length === 1 ? 'submission' : 'submissions'}
+              </p>
+              <div className="submission-list">
+                {submissions.map((sub) => {
+                  const { headline, subline } = submissionSummary(sub);
+                  return (
+                    <div key={sub.id} className="submission-row">
+                      <button
+                        className="submission-row-main"
+                        onClick={() => setSelectedSubmission(sub)}
+                      >
+                        <div className="submission-row-headline">{headline}</div>
+                        <div className="submission-row-meta">
+                          {subline && <span>{subline}</span>}
+                          {subline && <span className="submission-row-dot">•</span>}
+                          <span>
+                            {new Date(sub.submitted_at).toLocaleString('en-US', {
+                              month: 'short', day: 'numeric', year: 'numeric',
+                              hour: 'numeric', minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                      </button>
+                      <button
+                        className="submission-row-delete"
+                        title="Delete submission"
+                        onClick={() => handleDeleteSubmission(sub.id)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
+          {!djLoading && selectedSubmission && (
+            <>
+              {viewMeta?.submitted_at && (
+                <p className="results-timestamp">
+                  Submitted {new Date(viewMeta.submitted_at).toLocaleDateString('en-US', {
+                    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+                    hour: 'numeric', minute: '2-digit',
+                  })}
+                </p>
+              )}
               {SECTIONS.map((section, si) => (
                 <div key={section.id} className="result-section" style={{ animationDelay: `${si * 0.1}s` }}>
                   <h3 className="result-section-title">{section.icon} {section.title}</h3>
@@ -472,7 +583,13 @@ export default function App() {
                 </div>
               ))}
               <div className="results-actions">
-                <button className="copy-btn" onClick={copyResults}>Copy All Responses</button>
+                <button className="copy-btn" onClick={() => copyResults(selectedSubmission)}>Copy All Responses</button>
+                <button
+                  className="delete-btn"
+                  onClick={() => handleDeleteSubmission(selectedSubmission.id)}
+                >
+                  Delete this submission
+                </button>
               </div>
             </>
           )}
